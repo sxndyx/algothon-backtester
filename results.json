@@ -1,0 +1,78 @@
+{
+  "n_instruments": 3,
+  "n_days": 5,
+  "score": 0.0,
+  "total_pnl": 0.0,
+  "mean_daily_pnl": 0.0,
+  "std_daily_pnl": 0.0,
+  "total_commission": 0.0,
+  "total_turnover": 0.0,
+  "daily_pnl": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "cumulative_pnl": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "daily_turnover": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "daily_commission": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "positions": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "trades": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ]
+}
