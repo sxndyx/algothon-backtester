@@ -58,9 +58,11 @@ def main():
     output_path.write_text(json.dumps(results, indent=2))
 
     print("Backtest complete.")
-    print(f"Score: {results['score']:.4f}")
-    print(f"Total P&L: {results['total_pnl']:.2f}")
-    print(f"Total commission: {results['total_commission']:.2f}")
+    print(f"Score: {results['summary']['score']:.4f}")
+    print(f"Total P&L: {results['summary']['total_pnl']:.2f}")
+    print(f"Max drawdown: {results['summary']['max_drawdown']:.2f}")
+    print(f"Total commission: {results['summary']['total_commission']:.2f}")
+    print(f"Total turnover: {results['summary']['total_turnover']:.2f}")
     print(f"Results saved to: {output_path}")
 
 
