@@ -3,9 +3,6 @@ from pathlib import Path
 
 
 def load_strategy(strategy_path: str, function_name: str = "getMyPosition"):
-    """
-    Dynamically load a Python strategy file and return the strategy function.
-    """
     path = Path(strategy_path)
 
     if not path.exists():

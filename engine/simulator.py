@@ -5,9 +5,6 @@ import numpy as np
 
 
 def validate_positions(positions, n_instruments: int) -> np.ndarray:
-    """
-    Validate the output of the strategy position function.
-    """
     positions = np.asarray(positions)
 
     if positions.shape != (n_instruments,):
@@ -27,9 +24,6 @@ def validate_day_window(
     start_day: Optional[int],
     end_day: Optional[int],
 ) -> tuple[int, int]:
-    """
-    Validate and normalize the inclusive day window used for the backtest.
-    """
     if n_days < 2:
         raise ValueError("Backtest requires at least two days of price data.")
 
@@ -80,9 +74,6 @@ def clip_positions_to_limit(
     current_prices: np.ndarray,
     position_limit_dollars: float,
 ) -> tuple[np.ndarray, int, np.ndarray]:
-    """
-    Clip positions so no instrument exceeds the dollar position limit.
-    """
     max_shares = np.floor(position_limit_dollars / current_prices).astype(int)
 
     clipped_positions = np.clip(
@@ -105,9 +96,6 @@ def build_trade_log_entries(
     new_positions: np.ndarray,
     commission_rate: float,
 ) -> list[dict]:
-    """
-    Return one readable log entry for each non-zero trade.
-    """
     entries = []
 
     for instrument, signed_quantity in enumerate(trades):
@@ -138,9 +126,6 @@ def build_trade_log_entries(
 
 
 def calculate_drawdown(cumulative_pnl: list[float]) -> list[float]:
-    """
-    Drawdown is the fall from the previous cumulative P&L peak.
-    """
     drawdowns = []
     peak = float("-inf")
 
