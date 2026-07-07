@@ -2,16 +2,6 @@ import numpy as np
 
 
 def load_prices(path: str) -> np.ndarray:
-    """
-    Load official Algothon price data from a text file.
-
-    Expected shape:
-        rows = instruments
-        columns = days
-
-    Example:
-        prices[instrument, day]
-    """
     prices = np.loadtxt(path)
 
     if prices.ndim != 2:

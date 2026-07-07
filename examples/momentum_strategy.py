@@ -2,11 +2,6 @@ import numpy as np
 
 
 def getMyPosition(prices):
-    """
-    If today's price is higher than yesterday's, go long 10 shares.
-    If today's price is lower than yesterday's, go short 10 shares.
-    Otherwise hold zero.
-    """
     n_instruments, n_days = prices.shape
 
     if n_days < 2:
