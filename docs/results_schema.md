@@ -1,11 +1,11 @@
 # Results Schema
 
-This is the official JSON result object produced by
-`scripts/run_backtest.py` for the Algothon visualiser.
+This is the JSON result object produced by `scripts/run_backtest.py` for the
+Algothon visualiser.
 
-The object is deterministic for the same strategy and official price dataset.
-The engine does not generate simulated, bootstrapped, randomised, or fake market
-data.
+The result is deterministic for the same strategy, configuration, and provided
+price dataset. The engine does not generate simulated, bootstrapped, Monte
+Carlo, randomised, or fake market data.
 
 ## Top-Level Object
 
@@ -18,6 +18,8 @@ data.
   "positions": array<array<int>>,
   "trades": array<array<int>>,
   "trade_logs": array<object>,
+  "instrument_summary": array<object>,
+  "warnings": array<object>,
   "clipping_events": array<object>
 }
 ```
@@ -31,17 +33,16 @@ data.
 - `run_days` (`int`): number of backtested days.
 - `commission_rate` (`float`): commission rate applied to traded notional.
 - `position_limit_dollars` (`float`): per-instrument dollar exposure limit.
+- `strategy_function_name` (`string`): strategy function loaded from the file.
 - `deterministic` (`bool`): always `true` for official engine output.
 - `uses_simulated_price_data` (`bool`): always `false`.
 
-For partial windows, portfolio positions start flat on `start_day`; the
-strategy still receives official price history up to each current day.
-
 ## summary
 
-- `score` (`float`): engine score, currently mean daily P&L minus `0.1`
-  times daily P&L standard deviation.
+- `score` (`float`): mean daily P&L minus `0.1` times daily P&L standard
+  deviation.
 - `total_pnl` (`float`): cumulative net P&L over the run window.
+- `total_gross_pnl` (`float`): cumulative P&L before commission.
 - `mean_daily_pnl` (`float`): mean of daily net P&L.
 - `std_daily_pnl` (`float`): standard deviation of daily net P&L.
 - `max_drawdown` (`float`): worst drawdown from the cumulative P&L peak.
@@ -55,7 +56,7 @@ strategy still receives official price history up to each current day.
 
 One object per backtested day, ordered by day:
 
-- `day` (`int`): zero-based day index in the official price matrix.
+- `day` (`int`): zero-based day index in the provided price matrix.
 - `gross_pnl` (`float`): P&L before commission.
 - `net_pnl` (`float`): P&L after commission.
 - `cumulative_pnl` (`float`): cumulative net P&L through the day.
@@ -69,7 +70,9 @@ One object per backtested day, ordered by day:
 
 Arrays aligned one-to-one with `daily_records`:
 
+- `days` (`array<int>`)
 - `daily_pnl` (`array<float>`)
+- `gross_daily_pnl` (`array<float>`)
 - `cumulative_pnl` (`array<float>`)
 - `drawdown` (`array<float>`)
 - `daily_turnover` (`array<float>`)
@@ -78,26 +81,61 @@ Arrays aligned one-to-one with `daily_records`:
 ## positions
 
 Matrix of end-of-day positions. Rows align with `daily_records`; columns align
-with instrument index.
+with zero-based instrument index.
 
 ## trades
 
 Matrix of signed share trades. Rows align with `daily_records`; columns align
-with instrument index. Positive values are buys, negative values are sells, and
-zero means no trade for that instrument on that day.
+with zero-based instrument index. Positive values are buys, negative values are
+sells, and zero means no trade.
 
 ## trade_logs
 
 Readable one-row-per-trade records. Zero trades are omitted.
 
-- `day` (`int`): zero-based day index in the official price matrix.
+- `day` (`int`): zero-based day index in the provided price matrix.
 - `instrument` (`int`): zero-based instrument index.
-- `side` (`string`): `buy` or `sell`.
-- `shares` (`int`): absolute share count traded.
-- `signed_shares` (`int`): signed share count, matching the `trades` matrix.
-- `price` (`float`): official price used for the trade.
-- `notional` (`float`): absolute traded notional.
-- `position_after` (`int`): end-of-day position after the trade.
+- `side` (`string`): `BUY` or `SELL`.
+- `previous_position` (`int`): position before the trade.
+- `new_position` (`int`): position after the trade.
+- `trade_quantity` (`int`): absolute share count traded.
+- `signed_quantity` (`int`): signed share count matching the `trades` matrix.
+- `price` (`float`): provided dataset price used for the trade.
+- `trade_value` (`float`): absolute traded notional.
+- `commission` (`float`): commission charged for the trade.
+
+## instrument_summary
+
+One object per instrument:
+
+- `instrument` (`int`): zero-based instrument index.
+- `total_pnl` (`float`): net P&L attributed to the instrument.
+- `total_trades` (`int`): number of non-zero trades for the instrument.
+- `total_turnover` (`float`): absolute traded notional for the instrument.
+- `total_commission` (`float`): total commission charged for the instrument.
+- `average_position` (`float`): average end-of-day position during the run.
+- `max_abs_position` (`int`): maximum absolute end-of-day position.
+- `best_day_pnl` (`float`): best daily net P&L for the instrument.
+- `worst_day_pnl` (`float`): worst daily net P&L for the instrument.
+
+## warnings
+
+Deterministic rule-based diagnostics. Each warning object contains:
+
+- `code` (`string`): stable warning code.
+- `severity` (`string`): currently `warning`.
+- `message` (`string`): human-readable explanation.
+- `metric` (`string`): metric used by the rule.
+- `value` (`float`): observed metric value.
+- `threshold` (`float`): threshold that triggered the warning.
+
+Current warning codes:
+
+- `HIGH_COMMISSION_DRAG`
+- `HIGH_TURNOVER`
+- `FREQUENT_CLIPPING`
+- `HIGH_DAILY_PNL_VOLATILITY`
+- `PNL_CONCENTRATION`
 
 ## clipping_events
 
@@ -106,3 +144,4 @@ position limit:
 
 - `day` (`int`): zero-based day index.
 - `num_clipped_instruments` (`int`): number of instruments clipped that day.
+- `instruments` (`array<int>`): zero-based instrument indexes clipped that day.
