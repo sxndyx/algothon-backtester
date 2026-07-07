@@ -12,7 +12,7 @@ def load_prices(path: str) -> np.ndarray:
     Example:
         prices[instrument, day]
     """
-    prices = np.loadtxt(path)
+    prices = np.loadtxt(path, ndmin=2)
 
     if prices.ndim != 2:
         raise ValueError(

@@ -13,7 +13,7 @@ def main():
     parser.add_argument(
         "--strategy",
         required=True,
-        help="Path to strategy file containing getMyPosition(prices).",
+        help="Path to strategy file containing the strategy function.",
     )
 
     parser.add_argument(
@@ -56,10 +56,16 @@ def main():
         help="Last zero-based day index to run, inclusive.",
     )
 
+    parser.add_argument(
+        "--function-name",
+        default="getMyPosition",
+        help="Strategy function name to load from the strategy file.",
+    )
+
     args = parser.parse_args()
 
     prices = load_prices(args.prices)
-    strategy = load_strategy(args.strategy)
+    strategy = load_strategy(args.strategy, function_name=args.function_name)
 
     results = run_backtest(
         prices=prices,
@@ -68,6 +74,7 @@ def main():
         position_limit_dollars=args.position_limit,
         start_day=args.start_day,
         end_day=args.end_day,
+        function_name=args.function_name,
     )
 
     output_path = Path(args.out)

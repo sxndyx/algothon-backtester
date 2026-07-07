@@ -2,9 +2,9 @@ import importlib.util
 from pathlib import Path
 
 
-def load_strategy(strategy_path: str):
+def load_strategy(strategy_path: str, function_name: str = "getMyPosition"):
     """
-    Dynamically load a Python strategy file that contains getMyPosition().
+    Dynamically load a Python strategy file and return the strategy function.
     """
     path = Path(strategy_path)
 
@@ -19,7 +19,14 @@ def load_strategy(strategy_path: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    if not hasattr(module, "getMyPosition"):
-        raise AttributeError("Strategy file must define getMyPosition(prices).")
+    if not hasattr(module, function_name):
+        raise AttributeError(
+            f"Strategy file must define {function_name}(prices)."
+        )
 
-    return module.getMyPosition
+    strategy_function = getattr(module, function_name)
+
+    if not callable(strategy_function):
+        raise TypeError(f"Strategy attribute {function_name} is not callable.")
+
+    return strategy_function
