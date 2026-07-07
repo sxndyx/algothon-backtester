@@ -42,6 +42,20 @@ def main():
         help="Dollar position limit per instrument.",
     )
 
+    parser.add_argument(
+        "--start-day",
+        type=int,
+        default=None,
+        help="First zero-based day index to run. Must be at least 1.",
+    )
+
+    parser.add_argument(
+        "--end-day",
+        type=int,
+        default=None,
+        help="Last zero-based day index to run, inclusive.",
+    )
+
     args = parser.parse_args()
 
     prices = load_prices(args.prices)
@@ -52,6 +66,8 @@ def main():
         get_position_function=strategy,
         commission_rate=args.commission,
         position_limit_dollars=args.position_limit,
+        start_day=args.start_day,
+        end_day=args.end_day,
     )
 
     output_path = Path(args.out)
