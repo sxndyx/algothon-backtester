@@ -1,7 +1,15 @@
 from numbers import Integral
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
+
+
+DEFAULT_NUM_TEST_DAYS = 250
+DEFAULT_COMMISSION_RATE = 0.0001
+INSTRUMENT_0_COMMISSION_RATE = 0.00002
+DEFAULT_POSITION_LIMIT_DOLLARS = 10000.0
+INSTRUMENT_0_POSITION_LIMIT_DOLLARS = 100000.0
+SCORE_METHOD = "susquehanna_2026"
 
 
 def validate_positions(positions, n_instruments: int) -> np.ndarray:
@@ -19,38 +27,54 @@ def validate_positions(positions, n_instruments: int) -> np.ndarray:
     return positions.astype(int)
 
 
+def _validate_optional_day(day: Optional[int], name: str) -> Optional[int]:
+    if day is None:
+        return None
+
+    if isinstance(day, bool) or not isinstance(day, Integral):
+        raise TypeError(f"{name} must be an integer day index.")
+
+    return int(day)
+
+
 def validate_day_window(
     n_days: int,
     start_day: Optional[int],
     end_day: Optional[int],
+    num_test_days: int = DEFAULT_NUM_TEST_DAYS,
 ) -> tuple[int, int]:
     if n_days < 2:
         raise ValueError("Backtest requires at least two days of price data.")
 
-    if start_day is None:
-        start_day = 1
+    if isinstance(num_test_days, bool) or not isinstance(num_test_days, Integral):
+        raise TypeError("num_test_days must be a positive integer.")
+
+    num_test_days = int(num_test_days)
+
+    if num_test_days < 1:
+        raise ValueError("num_test_days must be a positive integer.")
+
+    end_day = _validate_optional_day(end_day, "end_day")
+    start_day = _validate_optional_day(start_day, "start_day")
 
     if end_day is None:
         end_day = n_days - 1
-
-    if isinstance(start_day, bool) or not isinstance(start_day, Integral):
-        raise TypeError("start_day must be an integer day index.")
-
-    if isinstance(end_day, bool) or not isinstance(end_day, Integral):
-        raise TypeError("end_day must be an integer day index.")
-
-    start_day = int(start_day)
-    end_day = int(end_day)
-
-    if start_day < 1:
-        raise ValueError(
-            "start_day must be at least 1 because day 0 has no previous price."
-        )
 
     if end_day >= n_days:
         raise ValueError(
             f"end_day must be less than the number of days ({n_days}); "
             f"got {end_day}."
+        )
+
+    if end_day < 1:
+        raise ValueError("end_day must be at least 1.")
+
+    if start_day is None:
+        start_day = max(1, end_day - num_test_days + 1)
+
+    if start_day < 1:
+        raise ValueError(
+            "start_day must be at least 1 because day 0 has no previous price."
         )
 
     if end_day < start_day:
@@ -69,12 +93,57 @@ def resolve_function_name(get_position_function, function_name: Optional[str]) -
     return getattr(get_position_function, "__name__", "getMyPosition")
 
 
+def build_commission_rates(
+    n_instruments: int,
+    default_commission_rate: float = DEFAULT_COMMISSION_RATE,
+    instrument_0_commission_rate: float = INSTRUMENT_0_COMMISSION_RATE,
+) -> np.ndarray:
+    rates = np.full(n_instruments, float(default_commission_rate), dtype=float)
+
+    if n_instruments > 0:
+        rates[0] = float(instrument_0_commission_rate)
+
+    return rates
+
+
+def build_position_limits(
+    n_instruments: int,
+    default_position_limit_dollars: float = DEFAULT_POSITION_LIMIT_DOLLARS,
+    instrument_0_position_limit_dollars: float = INSTRUMENT_0_POSITION_LIMIT_DOLLARS,
+) -> np.ndarray:
+    limits = np.full(n_instruments, float(default_position_limit_dollars), dtype=float)
+
+    if n_instruments > 0:
+        limits[0] = float(instrument_0_position_limit_dollars)
+
+    return limits
+
+
+def _validate_rule_vector(values: np.ndarray, n_instruments: int, name: str) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+
+    if values.shape != (n_instruments,):
+        raise ValueError(
+            f"{name} must have shape ({n_instruments},); got {values.shape}."
+        )
+
+    if np.any(~np.isfinite(values)):
+        raise ValueError(f"{name} contains NaN or infinite values.")
+
+    if np.any(values < 0):
+        raise ValueError(f"{name} must not contain negative values.")
+
+    return values
+
+
 def clip_positions_to_limit(
     desired_positions: np.ndarray,
     current_prices: np.ndarray,
-    position_limit_dollars: float,
+    position_limit_dollars_by_instrument: np.ndarray,
 ) -> tuple[np.ndarray, int, np.ndarray]:
-    max_shares = np.floor(position_limit_dollars / current_prices).astype(int)
+    max_shares = np.floor(
+        position_limit_dollars_by_instrument / current_prices
+    ).astype(int)
 
     clipped_positions = np.clip(
         desired_positions,
@@ -94,7 +163,7 @@ def build_trade_log_entries(
     current_prices: np.ndarray,
     previous_positions: np.ndarray,
     new_positions: np.ndarray,
-    commission_rate: float,
+    commission_rates: np.ndarray,
 ) -> list[dict]:
     entries = []
 
@@ -118,7 +187,7 @@ def build_trade_log_entries(
                 "signed_quantity": signed_quantity,
                 "price": price,
                 "trade_value": trade_value,
-                "commission": float(trade_value * commission_rate),
+                "commission": float(trade_value * commission_rates[instrument]),
             }
         )
 
@@ -134,6 +203,19 @@ def calculate_drawdown(cumulative_pnl: list[float]) -> list[float]:
         drawdowns.append(value - peak)
 
     return drawdowns
+
+
+def score_susquehanna_2026(
+    mean_daily_pnl: float,
+    std_daily_pnl: float,
+    param: float = 1.0,
+) -> float:
+    if mean_daily_pnl <= 0 or std_daily_pnl < 1e-10:
+        return float(mean_daily_pnl)
+
+    sharpe = np.sqrt(250) * mean_daily_pnl / std_daily_pnl
+    fraction = sharpe**2 / (sharpe**2 + param**2)
+    return float(mean_daily_pnl * fraction)
 
 
 def build_instrument_summary(
@@ -180,8 +262,7 @@ def build_warnings(
     daily_pnl: list[float],
     clipping_events: list[dict],
     run_days: int,
-    n_instruments: int,
-    position_limit_dollars: float,
+    position_limit_dollars_by_instrument: np.ndarray,
 ) -> list[dict]:
     warnings = []
     total_commission = summary["total_commission"]
@@ -202,7 +283,7 @@ def build_warnings(
             }
         )
 
-    daily_capacity = max(position_limit_dollars * n_instruments, 1.0)
+    daily_capacity = max(float(np.sum(position_limit_dollars_by_instrument)), 1.0)
     average_daily_turnover = total_turnover / max(run_days, 1)
     turnover_ratio = average_daily_turnover / daily_capacity
     if turnover_ratio >= 0.5:
@@ -211,7 +292,7 @@ def build_warnings(
                 "code": "HIGH_TURNOVER",
                 "severity": "warning",
                 "message": "Average daily turnover is high relative to available exposure.",
-                "metric": "average_daily_turnover / (position_limit_dollars * n_instruments)",
+                "metric": "average_daily_turnover / sum(position_limits)",
                 "value": float(turnover_ratio),
                 "threshold": 0.5,
             }
@@ -265,24 +346,70 @@ def build_warnings(
     return warnings
 
 
+def _normalise_tickers(
+    tickers: Optional[Sequence[str]],
+    n_instruments: int,
+) -> list[str] | None:
+    if tickers is None:
+        return None
+
+    tickers = list(tickers)
+
+    if len(tickers) != n_instruments:
+        raise ValueError(
+            f"tickers must have length {n_instruments}; got {len(tickers)}."
+        )
+
+    return [str(ticker) for ticker in tickers]
+
+
 def run_backtest(
     prices: np.ndarray,
     get_position_function,
-    commission_rate: float = 0.001,
-    position_limit_dollars: float = 10000.0,
+    commission_rate: float = DEFAULT_COMMISSION_RATE,
+    position_limit_dollars: float = DEFAULT_POSITION_LIMIT_DOLLARS,
+    instrument_0_commission_rate: float = INSTRUMENT_0_COMMISSION_RATE,
+    instrument_0_position_limit_dollars: float = INSTRUMENT_0_POSITION_LIMIT_DOLLARS,
     start_day: Optional[int] = None,
     end_day: Optional[int] = None,
     function_name: Optional[str] = None,
+    num_test_days: int = DEFAULT_NUM_TEST_DAYS,
+    tickers: Optional[Sequence[str]] = None,
 ) -> dict:
     """
-    Backtest on provided data only.
+    Backtest on provided data using the 2026 Susquehanna eval timing.
 
-    No new price data is generated. The engine only walks through the supplied
-    official price matrix.
+    The first loop opens an unscored warm-up position. Scored daily P&L starts
+    on start_day and the final loop marks positions without opening new trades.
     """
     n_instruments, n_days = prices.shape
-    start_day, end_day = validate_day_window(n_days, start_day, end_day)
+    start_day, end_day = validate_day_window(
+        n_days=n_days,
+        start_day=start_day,
+        end_day=end_day,
+        num_test_days=num_test_days,
+    )
     function_name = resolve_function_name(get_position_function, function_name)
+    tickers = _normalise_tickers(tickers, n_instruments)
+
+    commission_rates = _validate_rule_vector(
+        build_commission_rates(
+            n_instruments=n_instruments,
+            default_commission_rate=commission_rate,
+            instrument_0_commission_rate=instrument_0_commission_rate,
+        ),
+        n_instruments=n_instruments,
+        name="commission_rates",
+    )
+    position_limits = _validate_rule_vector(
+        build_position_limits(
+            n_instruments=n_instruments,
+            default_position_limit_dollars=position_limit_dollars,
+            instrument_0_position_limit_dollars=instrument_0_position_limit_dollars,
+        ),
+        n_instruments=n_instruments,
+        name="position_limit_dollars_by_instrument",
+    )
 
     current_positions = np.zeros(n_instruments, dtype=int)
 
@@ -300,80 +427,80 @@ def run_backtest(
     trade_logs = []
     clipping_events = []
 
+    cash = 0.0
+    portfolio_value = 0.0
     running_pnl = 0.0
     running_gross_pnl = 0.0
+    pending_commission_by_instrument = np.zeros(n_instruments, dtype=float)
+    pending_turnover_by_instrument = np.zeros(n_instruments, dtype=float)
+    pending_trade_count = 0
+    pending_num_clipped = 0
 
-    for day in range(start_day, end_day + 1):
-        prices_so_far = prices[:, : day + 1]
-
-        previous_prices = prices[:, day - 1]
-        current_prices = prices[:, day]
+    for eval_day in range(start_day, end_day + 2):
+        price_day = eval_day - 1
+        prices_so_far = prices[:, :eval_day]
+        current_prices = prices_so_far[:, -1]
+        previous_prices = prices[:, price_day - 1]
         previous_positions = current_positions.copy()
 
-        try:
-            desired_positions = get_position_function(prices_so_far)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Strategy function {function_name} crashed on day {day} "
-                f"with prices_so_far shape {prices_so_far.shape}: {exc}"
-            ) from exc
+        charged_commission_by_instrument = pending_commission_by_instrument.copy()
+        charged_turnover_by_instrument = pending_turnover_by_instrument.copy()
+        charged_commission = float(np.sum(charged_commission_by_instrument))
+        charged_turnover = float(np.sum(charged_turnover_by_instrument))
+        charged_trade_count = pending_trade_count
+        charged_num_clipped = pending_num_clipped
 
-        try:
-            desired_positions = validate_positions(desired_positions, n_instruments)
-        except ValueError as exc:
-            raise ValueError(
-                f"Strategy function {function_name} returned invalid positions "
-                f"on day {day} with prices_so_far shape {prices_so_far.shape}: {exc}"
-            ) from exc
+        if eval_day <= end_day:
+            try:
+                desired_positions = get_position_function(prices_so_far)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Strategy function {function_name} crashed on day {price_day} "
+                    f"with prices_so_far shape {prices_so_far.shape}: {exc}"
+                ) from exc
 
-        clipped_positions, num_clipped, clipped_mask = clip_positions_to_limit(
-            desired_positions=desired_positions,
-            current_prices=current_prices,
-            position_limit_dollars=position_limit_dollars,
-        )
+            try:
+                desired_positions = validate_positions(desired_positions, n_instruments)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Strategy function {function_name} returned invalid positions "
+                    f"on day {price_day} with prices_so_far shape "
+                    f"{prices_so_far.shape}: {exc}"
+                ) from exc
+
+            clipped_positions, num_clipped, clipped_mask = clip_positions_to_limit(
+                desired_positions=desired_positions,
+                current_prices=current_prices,
+                position_limit_dollars_by_instrument=position_limits,
+            )
+        else:
+            clipped_positions = current_positions.copy()
+            num_clipped = 0
+            clipped_mask = np.zeros(n_instruments, dtype=bool)
 
         trades = clipped_positions - previous_positions
         trade_values = trades * current_prices
-        instrument_turnover = np.abs(trade_values).astype(float)
-        instrument_commission = instrument_turnover * commission_rate
+        current_turnover_by_instrument = np.abs(trade_values).astype(float)
+        current_commission_by_instrument = (
+            current_turnover_by_instrument * commission_rates
+        )
+        current_trade_count = int(np.count_nonzero(trades))
 
-        turnover = float(np.sum(instrument_turnover))
-        commission = float(np.sum(instrument_commission))
         day_trade_logs = build_trade_log_entries(
-            day=day,
+            day=price_day,
             trades=trades,
             current_prices=current_prices,
             previous_positions=previous_positions,
             new_positions=clipped_positions,
-            commission_rate=commission_rate,
+            commission_rates=commission_rates,
         )
-
-        price_changes = current_prices - previous_prices
-        instrument_gross_pnl = previous_positions * price_changes
-        instrument_net_pnl = instrument_gross_pnl - instrument_commission
-        gross_pnl = float(np.sum(instrument_gross_pnl))
-        net_pnl = float(np.sum(instrument_net_pnl))
-
-        running_gross_pnl += gross_pnl
-        running_pnl += net_pnl
-
-        daily_pnl.append(net_pnl)
-        gross_daily_pnl.append(gross_pnl)
-        cumulative_pnl.append(running_pnl)
-        position_history.append(clipped_positions.tolist())
-        trade_history.append(trades.tolist())
-        daily_turnover.append(turnover)
-        daily_commission.append(commission)
-        instrument_pnl_history.append(instrument_net_pnl.astype(float).tolist())
-        instrument_turnover_history.append(instrument_turnover.astype(float).tolist())
-        instrument_commission_history.append(instrument_commission.astype(float).tolist())
         trade_logs.extend(day_trade_logs)
 
         if num_clipped > 0:
             clipping_events.append(
                 {
-                    "day": int(day),
-                    "num_clipped_instruments": num_clipped,
+                    "day": int(price_day),
+                    "num_clipped_instruments": int(num_clipped),
                     "instruments": [
                         int(instrument)
                         for instrument in np.flatnonzero(clipped_mask)
@@ -381,26 +508,60 @@ def run_backtest(
                 }
             )
 
-        daily_records.append(
-            {
-                "day": int(day),
-                "gross_pnl": gross_pnl,
-                "net_pnl": net_pnl,
-                "cumulative_pnl": running_pnl,
-                "turnover": turnover,
-                "commission": commission,
-                "num_traded_instruments": len(day_trade_logs),
-                "num_clipped_instruments": num_clipped,
-            }
-        )
-
+        cash -= float(current_prices.dot(trades)) + charged_commission
         current_positions = clipped_positions
+        position_value = float(current_positions.dot(current_prices))
+        net_pnl = cash + position_value - portfolio_value
+        portfolio_value = cash + position_value
+
+        instrument_gross_pnl = previous_positions * (current_prices - previous_prices)
+        instrument_net_pnl = (
+            instrument_gross_pnl - charged_commission_by_instrument
+        )
+        gross_pnl = float(np.sum(instrument_gross_pnl))
+
+        if eval_day > start_day:
+            running_gross_pnl += gross_pnl
+            running_pnl += net_pnl
+
+            daily_pnl.append(float(net_pnl))
+            gross_daily_pnl.append(gross_pnl)
+            cumulative_pnl.append(running_pnl)
+            position_history.append(current_positions.tolist())
+            trade_history.append(trades.tolist())
+            daily_turnover.append(charged_turnover)
+            daily_commission.append(charged_commission)
+            instrument_pnl_history.append(instrument_net_pnl.astype(float).tolist())
+            instrument_turnover_history.append(
+                charged_turnover_by_instrument.astype(float).tolist()
+            )
+            instrument_commission_history.append(
+                charged_commission_by_instrument.astype(float).tolist()
+            )
+
+            daily_records.append(
+                {
+                    "day": int(price_day),
+                    "gross_pnl": gross_pnl,
+                    "net_pnl": float(net_pnl),
+                    "cumulative_pnl": running_pnl,
+                    "turnover": charged_turnover,
+                    "commission": charged_commission,
+                    "num_traded_instruments": int(charged_trade_count),
+                    "num_clipped_instruments": int(charged_num_clipped),
+                }
+            )
+
+        pending_commission_by_instrument = current_commission_by_instrument
+        pending_turnover_by_instrument = current_turnover_by_instrument
+        pending_trade_count = current_trade_count
+        pending_num_clipped = int(num_clipped)
 
     drawdown = calculate_drawdown(cumulative_pnl)
 
     mean_daily_pnl = float(np.mean(daily_pnl)) if daily_pnl else 0.0
     std_daily_pnl = float(np.std(daily_pnl)) if daily_pnl else 0.0
-    score = mean_daily_pnl - 0.1 * std_daily_pnl
+    score = score_susquehanna_2026(mean_daily_pnl, std_daily_pnl)
     max_drawdown = float(min(drawdown)) if drawdown else 0.0
     run_days = int(end_day - start_day + 1)
 
@@ -431,23 +592,31 @@ def run_backtest(
         daily_pnl=daily_pnl,
         clipping_events=clipping_events,
         run_days=run_days,
-        n_instruments=n_instruments,
-        position_limit_dollars=position_limit_dollars,
+        position_limit_dollars_by_instrument=position_limits,
     )
 
+    metadata = {
+        "n_instruments": int(n_instruments),
+        "n_days": int(n_days),
+        "start_day": int(start_day),
+        "end_day": int(end_day),
+        "run_days": run_days,
+        "commission_rate": float(commission_rate),
+        "position_limit_dollars": float(position_limit_dollars),
+        "strategy_function_name": function_name,
+        "deterministic": True,
+        "uses_simulated_price_data": False,
+        "num_test_days": int(num_test_days),
+        "score_method": SCORE_METHOD,
+        "commission_rates": commission_rates.astype(float).tolist(),
+        "position_limit_dollars_by_instrument": position_limits.astype(float).tolist(),
+    }
+
+    if tickers is not None:
+        metadata["tickers"] = tickers
+
     return {
-        "metadata": {
-            "n_instruments": int(n_instruments),
-            "n_days": int(n_days),
-            "start_day": int(start_day),
-            "end_day": int(end_day),
-            "run_days": run_days,
-            "commission_rate": float(commission_rate),
-            "position_limit_dollars": float(position_limit_dollars),
-            "strategy_function_name": function_name,
-            "deterministic": True,
-            "uses_simulated_price_data": False,
-        },
+        "metadata": metadata,
         "summary": summary,
         "daily_records": daily_records,
         "series": {
