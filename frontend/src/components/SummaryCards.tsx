@@ -1,6 +1,5 @@
-import type { BacktestResults } from "../data/mockResults";
+import type { BacktestResults } from "../data/resultTypes";
 import {
-  formatBasisPoints,
   formatCompactCurrency,
   formatCurrency,
   formatNumber,
@@ -11,7 +10,7 @@ type SummaryCardsProps = {
 };
 
 export function SummaryCards({ results }: SummaryCardsProps) {
-  const { metadata, summary } = results;
+  const { summary } = results;
   const cards = [
     {
       label: "Score",
@@ -22,16 +21,6 @@ export function SummaryCards({ results }: SummaryCardsProps) {
       label: "Total P&L",
       value: formatCurrency(summary.total_pnl),
       accent: summary.total_pnl >= 0 ? "green" : "red",
-    },
-    {
-      label: "Mean Daily P&L",
-      value: formatCurrency(summary.mean_daily_pnl),
-      accent: "green",
-    },
-    {
-      label: "Volatility",
-      value: formatCurrency(summary.std_daily_pnl),
-      accent: "amber",
     },
     {
       label: "Max Drawdown",
@@ -49,8 +38,13 @@ export function SummaryCards({ results }: SummaryCardsProps) {
       accent: "orange",
     },
     {
-      label: "Commission Rate",
-      value: formatBasisPoints(metadata.commission_rate),
+      label: "Total Trades",
+      value: formatNumber(summary.total_trades),
+      accent: "blue",
+    },
+    {
+      label: "Clipping Days",
+      value: formatNumber(summary.clipping_event_count),
       accent: "slate",
     },
   ];

@@ -47,6 +47,10 @@ const tones = {
 };
 
 function getRange(values: number[]): { min: number; max: number } {
+  if (values.length === 0) {
+    return { min: 0, max: 1 };
+  }
+
   const min = Math.min(...values);
   const max = Math.max(...values);
 
@@ -116,14 +120,17 @@ function AxisLabels({
 function ChartFrame({
   children,
   title,
+  legend,
 }: {
   children: React.ReactNode;
   title: string;
+  legend?: React.ReactNode;
 }) {
   return (
     <section className="chart-panel" aria-label={title}>
       <div className="chart-panel-header">
         <h2>{title}</h2>
+        {legend}
       </div>
       <svg className="chart-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img">
         <line
@@ -193,13 +200,15 @@ export function LineChart({
 export function BarChart({ data, title, formatValue = String }: BarChartProps) {
   const { min, max } = getRange(data.map((point) => point.value));
   const baseline = yFor(Math.max(0, min), min, max);
-  const barWidth = Math.max((chartWidth - padding.left - padding.right) / data.length - 1, 1);
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const slotWidth = innerWidth / Math.max(data.length, 1);
+  const barWidth = Math.max(Math.min(slotWidth * 0.72, 18), 1);
 
   return (
     <ChartFrame title={title}>
       <AxisLabels min={min} max={max} formatValue={formatValue} />
       {data.map((point, index) => {
-        const x = xFor(index, data.length) - barWidth / 2;
+        const x = padding.left + slotWidth * index + (slotWidth - barWidth) / 2;
         const y = yFor(point.value, min, max);
         const height = Math.max(Math.abs(baseline - y), 1);
         const isPositive = point.value >= 0;
@@ -243,20 +252,24 @@ export function DualLineChart({
   const { min, max } = getRange(data.flatMap((point) => [point.primary, point.secondary]));
 
   return (
-    <ChartFrame title={title}>
+    <ChartFrame
+      title={title}
+      legend={
+        <div className="chart-legend-row" aria-label={`${primaryLabel} and ${secondaryLabel} legend`}>
+          <span>
+            <i style={{ backgroundColor: "#7c3aed" }} />
+            {primaryLabel}
+          </span>
+          <span>
+            <i style={{ backgroundColor: "#ea580c" }} />
+            {secondaryLabel}
+          </span>
+        </div>
+      }
+    >
       <AxisLabels min={min} max={max} formatValue={formatValue} />
       <path className="chart-line" d={linePath(primaryData, min, max)} stroke="#7c3aed" />
       <path className="chart-line chart-line-soft" d={linePath(secondaryData, min, max)} stroke="#ea580c" />
-      <g className="chart-legend">
-        <circle cx={padding.left} cy={padding.top + 2} r="4" fill="#7c3aed" />
-        <text x={padding.left + 10} y={padding.top + 6}>
-          {primaryLabel}
-        </text>
-        <circle cx={padding.left + 120} cy={padding.top + 2} r="4" fill="#ea580c" />
-        <text x={padding.left + 130} y={padding.top + 6}>
-          {secondaryLabel}
-        </text>
-      </g>
     </ChartFrame>
   );
 }
