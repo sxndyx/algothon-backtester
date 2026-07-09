@@ -15,6 +15,9 @@ Use `summary` for dashboard cards:
 - `summary.total_trades`
 - `summary.clipping_event_count`
 
+If `metadata.tickers` is present, frontend views may use it for instrument
+labels. Instrument indexes remain the stable identifiers.
+
 ## Charts
 
 Use `series` for charts. `series.days` is the x-axis and all series arrays are

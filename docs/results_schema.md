@@ -36,11 +36,19 @@ Carlo, randomised, or fake market data.
 - `strategy_function_name` (`string`): strategy function loaded from the file.
 - `deterministic` (`bool`): always `true` for official engine output.
 - `uses_simulated_price_data` (`bool`): always `false`.
+- `tickers` (`array<string>`, optional): instrument symbols from a headered
+  price file.
+- `num_test_days` (`int`): default scored window length.
+- `score_method` (`string`): scoring method identifier.
+- `commission_rates` (`array<float>`): per-instrument commission rates.
+- `position_limit_dollars_by_instrument` (`array<float>`): per-instrument
+  dollar exposure limits.
+- `price_input_format` (`string`): detected price file shape.
 
 ## summary
 
-- `score` (`float`): mean daily P&L minus `0.1` times daily P&L standard
-  deviation.
+- `score` (`float`): Susquehanna 2026 score from mean daily P&L, daily P&L
+  standard deviation, and the supplied Sharpe-like adjustment.
 - `total_pnl` (`float`): cumulative net P&L over the run window.
 - `total_gross_pnl` (`float`): cumulative P&L before commission.
 - `mean_daily_pnl` (`float`): mean of daily net P&L.

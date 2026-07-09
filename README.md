@@ -13,7 +13,7 @@ review.
 
 | Component | Status | Notes |
 | --- | --- | --- |
-| Deterministic backtester engine | Implemented | Runs strategies day by day over the provided price matrix. |
+| Deterministic backtester engine | Implemented | Runs strategies with the supplied 2026 eval-style timing and rules. |
 | Visualiser data output | Implemented | Outputs structured JSON with summary, series, matrices, trade logs, instrument summaries, warnings, and clipping events. |
 | Quick-look plots | Implemented | `scripts/plot_results.py` saves PNG charts from a results JSON file. |
 | Final web frontend | Not implemented | No frontend application is present in this repository yet. |
@@ -55,12 +55,13 @@ pip install -r requirements.txt
 
 ## Price Data Format
 
-Price data is loaded as a numeric text matrix:
+The engine uses prices internally as `(n_instruments, n_days)`.
 
-- Rows are instruments.
-- Columns are days.
-- Values are accessed as `prices[instrument, day]`.
-- The expected shape is `(n_instruments, n_days)`.
+Two file shapes are supported:
+
+- Old numeric fixture format: rows are instruments, columns are days, no header.
+- 2026 format: first row is ticker symbols, rows are days, columns are
+  instruments. This is transposed after loading.
 
 The current sample file, `data/prices.txt`, contains:
 
@@ -91,10 +92,19 @@ randomised, or fake market data.
 
 ## Running A Backtest
 
-Standard run:
+Standard 2026-style run:
 
 ```bash
-PYTHONPATH=. python3 scripts/run_backtest.py \
+python3 scripts/run_backtest.py \
+  --strategy examples/team_strategy.py \
+  --prices frontend/testing/prices_test.txt \
+  --out frontend/public/results.json
+```
+
+Small fixture run:
+
+```bash
+python3 scripts/run_backtest.py \
   --strategy examples/momentum_strategy.py \
   --prices data/prices.txt \
   --out examples/sample_results.json
@@ -103,7 +113,7 @@ PYTHONPATH=. python3 scripts/run_backtest.py \
 Windowed run:
 
 ```bash
-PYTHONPATH=. python3 scripts/run_backtest.py \
+python3 scripts/run_backtest.py \
   --strategy examples/momentum_strategy.py \
   --prices data/prices.txt \
   --start-day 1 \
@@ -114,7 +124,7 @@ PYTHONPATH=. python3 scripts/run_backtest.py \
 Custom strategy function name:
 
 ```bash
-PYTHONPATH=. python3 scripts/run_backtest.py \
+python3 scripts/run_backtest.py \
   --strategy examples/momentum_strategy.py \
   --prices data/prices.txt \
   --function-name getMyPosition \
@@ -128,23 +138,26 @@ PYTHONPATH=. python3 scripts/run_backtest.py \
 | `--strategy` | Yes | None | Path to a Python strategy file. |
 | `--prices` | Yes | None | Path to the official price dataset. |
 | `--out` | No | `results.json` | Path where the results JSON will be written. |
-| `--commission` | No | `0.001` | Commission rate charged on traded notional. |
-| `--position-limit` | No | `10000.0` | Dollar position limit applied per instrument. |
-| `--start-day` | No | `1` | First zero-based day index to run. Must be at least `1`. |
+| `--commission` | No | `0.0001` | Default commission rate charged on traded notional. |
+| `--position-limit` | No | `10000.0` | Default dollar position limit applied per instrument. |
+| `--instrument-0-commission` | No | `0.00002` | Special commission rate for instrument 0. |
+| `--instrument-0-position-limit` | No | `100000.0` | Special dollar position limit for instrument 0. |
+| `--num-test-days` | No | `250` | Default scored window length when `--start-day` is omitted. |
+| `--start-day` | No | Final 250-day window | First zero-based scored day. Must be at least `1`. |
 | `--end-day` | No | Last available day | Last zero-based day index to run, inclusive. |
 | `--function-name` | No | `getMyPosition` | Strategy function name to load from the strategy file. |
 
 ## Backtest Logic
 
-The engine follows a deterministic daily loop:
+The engine follows the supplied 2026 eval timing:
 
-1. Each day passes `prices[:, : day + 1]` into the strategy.
-2. The returned target positions are validated for shape and finite values.
-3. Positions are clipped to the configured per-instrument dollar limit.
-4. Trades are calculated as new position minus previous position.
-5. Commission is charged on traded notional.
-6. P&L is calculated from positions held over the price movement from the
-   previous day to the current day.
+1. The default scored window is the final 250 days.
+2. One unscored warm-up trade is performed before the first scored day.
+3. Each strategy call receives `prices[:, :t]`, matching the official eval
+   script's slicing.
+4. Positions are clipped to per-instrument dollar limits.
+5. Instrument 0 receives the special commission and limit.
+6. The final loop marks positions without opening new trades.
 7. Results are deterministic for the same strategy, configuration, and dataset.
 
 ## Output JSON
@@ -191,6 +204,7 @@ final web frontend.
 
 - `examples/zero_strategy.py`: returns zero positions for every instrument.
 - `examples/momentum_strategy.py`: simple deterministic momentum example.
+- `examples/team_strategy.py`: cleaned version of the supplied test strategy.
 - `examples/broken_strategy.py`: intentionally returns the wrong number of
   positions to demonstrate validation errors.
 
