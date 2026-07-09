@@ -13,12 +13,16 @@ type LineChartProps = {
   data: SeriesPoint[];
   title: string;
   tone?: "blue" | "green" | "red" | "amber";
+  domain?: ChartDomainOptions;
+  showZeroLine?: boolean;
   formatValue?: (value: number) => string;
 };
 
 type BarChartProps = {
   data: SeriesPoint[];
   title: string;
+  domain?: ChartDomainOptions;
+  showZeroLine?: boolean;
   formatValue?: (value: number) => string;
 };
 
@@ -27,7 +31,15 @@ type DualLineChartProps = {
   title: string;
   primaryLabel: string;
   secondaryLabel: string;
+  domain?: ChartDomainOptions;
+  showZeroLine?: boolean;
   formatValue?: (value: number) => string;
+};
+
+type ChartDomainOptions = {
+  includeZero?: boolean;
+  fixedMin?: number;
+  fixedMax?: number;
 };
 
 const chartWidth = 720;
@@ -46,22 +58,66 @@ const tones = {
   amber: "#d97706",
 };
 
-function getRange(values: number[]): { min: number; max: number } {
+function getRange(
+  values: number[],
+  options: ChartDomainOptions = {},
+): { min: number; max: number } {
   if (values.length === 0) {
-    return { min: 0, max: 1 };
+    return {
+      min: options.fixedMin ?? 0,
+      max: options.fixedMax ?? 1,
+    };
   }
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  let min = rawMin;
+  let max = rawMax;
+
+  if (options.includeZero) {
+    min = Math.min(min, 0);
+    max = Math.max(max, 0);
+  }
+
+  if (options.fixedMin !== undefined) {
+    min = options.fixedMin;
+  }
+
+  if (options.fixedMax !== undefined) {
+    max = options.fixedMax;
+  }
 
   if (min === max) {
+    if (options.includeZero && min === 0) {
+      return { min: 0, max: 1 };
+    }
+
+    if (options.fixedMin !== undefined && options.fixedMax === undefined) {
+      return { min, max: min + 1 };
+    }
+
+    if (options.fixedMax !== undefined && options.fixedMin === undefined) {
+      return { min: max - 1, max };
+    }
+
     return { min: min - 1, max: max + 1 };
   }
 
   const paddingValue = (max - min) * 0.08;
+  const zeroIsLowerBound =
+    options.includeZero && rawMin >= 0 && options.fixedMin === undefined;
+  const zeroIsUpperBound =
+    options.includeZero && rawMax <= 0 && options.fixedMax === undefined;
+
   return {
-    min: min - paddingValue,
-    max: max + paddingValue,
+    min:
+      options.fixedMin === undefined && !zeroIsLowerBound
+        ? min - paddingValue
+        : min,
+    max:
+      options.fixedMax === undefined && !zeroIsUpperBound
+        ? max + paddingValue
+        : max,
   };
 }
 
@@ -84,25 +140,15 @@ function linePath(data: SeriesPoint[], min: number, max: number): string {
     .join(" ");
 }
 
-function areaPath(data: SeriesPoint[], min: number, max: number): string {
-  if (data.length === 0) {
-    return "";
-  }
-
-  const baseline = yFor(Math.max(0, min), min, max);
-  const path = linePath(data, min, max);
-  const lastX = xFor(data.length - 1, data.length);
-  const firstX = xFor(0, data.length);
-  return `${path} L ${lastX.toFixed(2)} ${baseline.toFixed(2)} L ${firstX.toFixed(2)} ${baseline.toFixed(2)} Z`;
-}
-
 function AxisLabels({
   min,
   max,
+  showZero,
   formatValue,
 }: {
   min: number;
   max: number;
+  showZero?: boolean;
   formatValue: (value: number) => string;
 }) {
   return (
@@ -113,7 +159,30 @@ function AxisLabels({
       <text className="chart-axis-label" x={padding.left - 10} y={chartHeight - padding.bottom}>
         {formatValue(min)}
       </text>
+      {showZero && min < 0 && max > 0 ? (
+        <text className="chart-axis-label chart-zero-label" x={padding.left - 10} y={yFor(0, min, max) + 4}>
+          {formatValue(0)}
+        </text>
+      ) : null}
     </>
+  );
+}
+
+function ZeroLine({ min, max }: { min: number; max: number }) {
+  if (min > 0 || max < 0) {
+    return null;
+  }
+
+  const zeroY = yFor(0, min, max);
+
+  return (
+    <line
+      className="chart-zero-line"
+      x1={padding.left}
+      x2={chartWidth - padding.right}
+      y1={zeroY}
+      y2={zeroY}
+    />
   );
 }
 
@@ -178,14 +247,16 @@ export function LineChart({
   data,
   title,
   tone = "blue",
+  domain = {},
+  showZeroLine = false,
   formatValue = String,
 }: LineChartProps) {
-  const { min, max } = getRange(data.map((point) => point.value));
+  const { min, max } = getRange(data.map((point) => point.value), domain);
 
   return (
     <ChartFrame title={title}>
-      <AxisLabels min={min} max={max} formatValue={formatValue} />
-      <path className="chart-area" d={areaPath(data, min, max)} fill={tones[tone]} />
+      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
+      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
       <path className="chart-line" d={linePath(data, min, max)} stroke={tones[tone]} />
       <text className="chart-x-label" x={padding.left} y={chartHeight - 10}>
         Day {data[0]?.day ?? 0}
@@ -197,16 +268,23 @@ export function LineChart({
   );
 }
 
-export function BarChart({ data, title, formatValue = String }: BarChartProps) {
-  const { min, max } = getRange(data.map((point) => point.value));
-  const baseline = yFor(Math.max(0, min), min, max);
+export function BarChart({
+  data,
+  title,
+  domain = {},
+  showZeroLine = false,
+  formatValue = String,
+}: BarChartProps) {
+  const { min, max } = getRange(data.map((point) => point.value), domain);
+  const baseline = yFor(0, min, max);
   const innerWidth = chartWidth - padding.left - padding.right;
   const slotWidth = innerWidth / Math.max(data.length, 1);
   const barWidth = Math.max(Math.min(slotWidth * 0.72, 18), 1);
 
   return (
     <ChartFrame title={title}>
-      <AxisLabels min={min} max={max} formatValue={formatValue} />
+      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
+      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
       {data.map((point, index) => {
         const x = padding.left + slotWidth * index + (slotWidth - barWidth) / 2;
         const y = yFor(point.value, min, max);
@@ -239,6 +317,8 @@ export function DualLineChart({
   title,
   primaryLabel,
   secondaryLabel,
+  domain = {},
+  showZeroLine = false,
   formatValue = String,
 }: DualLineChartProps) {
   const primaryData = data.map((point) => ({
@@ -249,7 +329,10 @@ export function DualLineChart({
     day: point.day,
     value: point.secondary,
   }));
-  const { min, max } = getRange(data.flatMap((point) => [point.primary, point.secondary]));
+  const { min, max } = getRange(
+    data.flatMap((point) => [point.primary, point.secondary]),
+    domain,
+  );
 
   return (
     <ChartFrame
@@ -267,7 +350,8 @@ export function DualLineChart({
         </div>
       }
     >
-      <AxisLabels min={min} max={max} formatValue={formatValue} />
+      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
+      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
       <path className="chart-line" d={linePath(primaryData, min, max)} stroke="#7c3aed" />
       <path className="chart-line chart-line-soft" d={linePath(secondaryData, min, max)} stroke="#ea580c" />
     </ChartFrame>

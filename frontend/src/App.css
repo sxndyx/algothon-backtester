@@ -38,6 +38,13 @@ h2 {
   font-size: 1rem;
 }
 
+.chart-subtitle {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
 .run-meta {
   display: flex;
   flex-wrap: wrap;
@@ -235,6 +242,12 @@ h2 {
   stroke-dasharray: 5 5;
 }
 
+.chart-zero-line {
+  stroke: #475569;
+  stroke-width: 1.4;
+  stroke-dasharray: 0;
+}
+
 .chart-axis-label,
 .chart-x-label {
   fill: #64748b;
@@ -246,12 +259,12 @@ h2 {
   text-anchor: end;
 }
 
-.chart-x-label-end {
-  text-anchor: end;
+.chart-zero-label {
+  fill: #334155;
 }
 
-.chart-area {
-  opacity: 0.1;
+.chart-x-label-end {
+  text-anchor: end;
 }
 
 .chart-line {

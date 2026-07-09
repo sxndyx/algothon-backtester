@@ -56,11 +56,19 @@ function TradeMarkerChart({ trades }: { trades: TradeLog[] }) {
     return `M ${x.toFixed(2)} ${(y + size).toFixed(2)} L ${(x - size).toFixed(2)} ${(y - size).toFixed(2)} L ${(x + size).toFixed(2)} ${(y - size).toFixed(2)} Z`;
   };
   const recentTrades = trades.slice(-8).reverse();
+  const recentCount = recentTrades.length;
 
   return (
     <section className="trade-marker-panel" aria-label="Trade price markers">
       <div className="chart-panel-header">
-        <h2>Trade Prices</h2>
+        <div>
+          <h2>Trade Prices</h2>
+          {trades.length > 0 ? (
+            <p className="chart-subtitle">
+              Latest {recentCount} of {formatNumber(trades.length)} scored trades
+            </p>
+          ) : null}
+        </div>
         <div className="chart-legend-row" aria-label="Buy and sell legend">
           <span>
             <i className="legend-triangle legend-buy" />
@@ -134,7 +142,7 @@ function TradeMarkerChart({ trades }: { trades: TradeLog[] }) {
               Day {maxDay}
             </text>
           </svg>
-          <div className="marker-trade-list" aria-label="Recent trades">
+          <div className="marker-trade-list" aria-label="Latest scored trades">
             {recentTrades.map((trade, index) => (
               <article key={`${trade.day}-${trade.side}-${trade.instrument}-${index}`}>
                 <span>Day {trade.day}</span>
@@ -163,7 +171,10 @@ export function InstrumentInspector({
     (item) => item.instrument === selectedInstrument,
   );
   const markerTrades = results.trade_logs.filter(
-    (trade) => trade.instrument === selectedInstrument,
+    (trade) =>
+      trade.instrument === selectedInstrument &&
+      trade.day >= results.metadata.start_day &&
+      trade.day <= results.metadata.end_day,
   );
 
   return (

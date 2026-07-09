@@ -103,13 +103,23 @@ function App() {
           data={cumulativePnl}
           title="Cumulative P&L"
           tone="blue"
+          domain={{ includeZero: true }}
+          showZeroLine
           formatValue={formatCurrency}
         />
-        <BarChart data={dailyPnl} title="Daily P&L" formatValue={formatCurrency} />
+        <BarChart
+          data={dailyPnl}
+          title="Daily P&L"
+          domain={{ includeZero: true }}
+          showZeroLine
+          formatValue={formatCurrency}
+        />
         <LineChart
           data={drawdown}
           title="Drawdown"
           tone="red"
+          domain={{ fixedMax: 0 }}
+          showZeroLine
           formatValue={formatCurrency}
         />
         <DualLineChart
@@ -117,6 +127,8 @@ function App() {
           title="Turnover and Commission"
           primaryLabel="Turnover"
           secondaryLabel="Commission"
+          domain={{ fixedMin: 0 }}
+          showZeroLine
           formatValue={formatCompactCurrency}
         />
       </section>
