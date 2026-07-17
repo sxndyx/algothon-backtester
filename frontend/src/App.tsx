@@ -79,7 +79,7 @@ function App() {
     <main className="app-shell">
       <header className="app-header">
         <div>
-          <p className="section-kicker">UNSW FinTechSoc x SIG</p>
+          <p className="section-kicker">UNSW FinTechSoc x Susquehanna</p>
           <h1>Algothon Backtester</h1>
         </div>
         <div className="run-meta">
