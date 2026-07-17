@@ -13,6 +13,7 @@ results.json
 momentum_results.json
 *_results.json
 examples/plots/
+backtest_runs/
 
 # Local data files
 # Keep this if the official dataset should not be committed

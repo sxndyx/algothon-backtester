@@ -190,18 +190,28 @@ function ChartFrame({
   children,
   title,
   legend,
+  empty = false,
 }: {
   children: React.ReactNode;
   title: string;
   legend?: React.ReactNode;
+  empty?: boolean;
 }) {
   return (
-    <section className="chart-panel" aria-label={title}>
+    <section
+      className={`chart-panel ${empty ? "chart-panel-empty" : ""}`}
+      aria-label={title}
+    >
       <div className="chart-panel-header">
         <h2>{title}</h2>
         {legend}
       </div>
-      <svg className="chart-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img">
+      <svg
+        className="chart-svg"
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        role="img"
+        aria-label={empty ? `${title}: no backtest data yet` : title}
+      >
         <line
           className="chart-grid-line"
           x1={padding.left}
@@ -238,6 +248,15 @@ function ChartFrame({
           y2={chartHeight - padding.bottom}
         />
         {children}
+        {empty ? (
+          <text
+            className="chart-empty-label"
+            x={chartWidth / 2}
+            y={(chartHeight - padding.bottom + padding.top) / 2 + 4}
+          >
+            Waiting for backtest data
+          </text>
+        ) : null}
       </svg>
     </section>
   );
@@ -252,18 +271,30 @@ export function LineChart({
   formatValue = String,
 }: LineChartProps) {
   const { min, max } = getRange(data.map((point) => point.value), domain);
+  const isEmpty = data.length === 0;
 
   return (
-    <ChartFrame title={title}>
-      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
-      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
+    <ChartFrame title={title} empty={isEmpty}>
+      {!isEmpty ? (
+        <AxisLabels
+          min={min}
+          max={max}
+          showZero={showZeroLine}
+          formatValue={formatValue}
+        />
+      ) : null}
+      {showZeroLine && !isEmpty ? <ZeroLine min={min} max={max} /> : null}
       <path className="chart-line" d={linePath(data, min, max)} stroke={tones[tone]} />
-      <text className="chart-x-label" x={padding.left} y={chartHeight - 10}>
-        Day {data[0]?.day ?? 0}
-      </text>
-      <text className="chart-x-label chart-x-label-end" x={chartWidth - padding.right} y={chartHeight - 10}>
-        Day {data[data.length - 1]?.day ?? 0}
-      </text>
+      {!isEmpty ? (
+        <>
+          <text className="chart-x-label" x={padding.left} y={chartHeight - 10}>
+            Day {data[0]?.day}
+          </text>
+          <text className="chart-x-label chart-x-label-end" x={chartWidth - padding.right} y={chartHeight - 10}>
+            Day {data[data.length - 1]?.day}
+          </text>
+        </>
+      ) : null}
     </ChartFrame>
   );
 }
@@ -276,15 +307,23 @@ export function BarChart({
   formatValue = String,
 }: BarChartProps) {
   const { min, max } = getRange(data.map((point) => point.value), domain);
+  const isEmpty = data.length === 0;
   const baseline = yFor(0, min, max);
   const innerWidth = chartWidth - padding.left - padding.right;
   const slotWidth = innerWidth / Math.max(data.length, 1);
   const barWidth = Math.max(Math.min(slotWidth * 0.72, 18), 1);
 
   return (
-    <ChartFrame title={title}>
-      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
-      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
+    <ChartFrame title={title} empty={isEmpty}>
+      {!isEmpty ? (
+        <AxisLabels
+          min={min}
+          max={max}
+          showZero={showZeroLine}
+          formatValue={formatValue}
+        />
+      ) : null}
+      {showZeroLine && !isEmpty ? <ZeroLine min={min} max={max} /> : null}
       {data.map((point, index) => {
         const x = padding.left + slotWidth * index + (slotWidth - barWidth) / 2;
         const y = yFor(point.value, min, max);
@@ -302,12 +341,16 @@ export function BarChart({
           />
         );
       })}
-      <text className="chart-x-label" x={padding.left} y={chartHeight - 10}>
-        Day {data[0]?.day ?? 0}
-      </text>
-      <text className="chart-x-label chart-x-label-end" x={chartWidth - padding.right} y={chartHeight - 10}>
-        Day {data[data.length - 1]?.day ?? 0}
-      </text>
+      {!isEmpty ? (
+        <>
+          <text className="chart-x-label" x={padding.left} y={chartHeight - 10}>
+            Day {data[0]?.day}
+          </text>
+          <text className="chart-x-label chart-x-label-end" x={chartWidth - padding.right} y={chartHeight - 10}>
+            Day {data[data.length - 1]?.day}
+          </text>
+        </>
+      ) : null}
     </ChartFrame>
   );
 }
@@ -321,6 +364,7 @@ export function DualLineChart({
   showZeroLine = false,
   formatValue = String,
 }: DualLineChartProps) {
+  const isEmpty = data.length === 0;
   const primaryData = data.map((point) => ({
     day: point.day,
     value: point.primary,
@@ -337,6 +381,7 @@ export function DualLineChart({
   return (
     <ChartFrame
       title={title}
+      empty={isEmpty}
       legend={
         <div className="chart-legend-row" aria-label={`${primaryLabel} and ${secondaryLabel} legend`}>
           <span>
@@ -350,8 +395,15 @@ export function DualLineChart({
         </div>
       }
     >
-      <AxisLabels min={min} max={max} showZero={showZeroLine} formatValue={formatValue} />
-      {showZeroLine ? <ZeroLine min={min} max={max} /> : null}
+      {!isEmpty ? (
+        <AxisLabels
+          min={min}
+          max={max}
+          showZero={showZeroLine}
+          formatValue={formatValue}
+        />
+      ) : null}
+      {showZeroLine && !isEmpty ? <ZeroLine min={min} max={max} /> : null}
       <path className="chart-line" d={linePath(primaryData, min, max)} stroke="#7c3aed" />
       <path className="chart-line chart-line-soft" d={linePath(secondaryData, min, max)} stroke="#ea580c" />
     </ChartFrame>
