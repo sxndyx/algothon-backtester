@@ -1,4 +1,7 @@
 export type BacktestMetadata = {
+  test_id?: string;
+  original_strategy_filename?: string;
+  created_at?: string;
   n_instruments: number;
   n_days: number;
   start_day: number;
