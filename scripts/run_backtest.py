@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from engine.data_loader import load_price_data
+from engine.result_export import write_results_csv
 from engine.strategy_loader import load_strategy
 from engine.simulator import (
     DEFAULT_COMMISSION_RATE,
@@ -39,6 +40,30 @@ def main():
         "--out",
         default="results.json",
         help="Output path for results JSON.",
+    )
+
+    parser.add_argument(
+        "--csv-out",
+        default=None,
+        help="Optional path for a complete long-form CSV copy of the results.",
+    )
+
+    parser.add_argument(
+        "--test-id",
+        default=None,
+        help="Optional stored test identifier to include in result metadata.",
+    )
+
+    parser.add_argument(
+        "--original-strategy-filename",
+        default=None,
+        help="Optional original upload filename to include in result metadata.",
+    )
+
+    parser.add_argument(
+        "--created-at",
+        default=None,
+        help="Optional stored test creation timestamp to include in result metadata.",
     )
 
     parser.add_argument(
@@ -115,10 +140,22 @@ def main():
         tickers=price_data.tickers,
     )
     results["metadata"]["price_input_format"] = price_data.input_format
+    if args.test_id:
+        results["metadata"]["test_id"] = args.test_id
+    if args.original_strategy_filename:
+        results["metadata"]["original_strategy_filename"] = (
+            args.original_strategy_filename
+        )
+    if args.created_at:
+        results["metadata"]["created_at"] = args.created_at
 
     output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(results, indent=2))
+
+    csv_output_path = None
+    if args.csv_out:
+        csv_output_path = write_results_csv(results, args.csv_out)
 
     print("Backtest complete.")
     print(
@@ -135,6 +172,8 @@ def main():
     print(f"Total commission: {results['summary']['total_commission']:.2f}")
     print(f"Total turnover: {results['summary']['total_turnover']:.2f}")
     print(f"Results saved to: {output_path}")
+    if csv_output_path is not None:
+        print(f"CSV results saved to: {csv_output_path}")
 
 
 if __name__ == "__main__":
