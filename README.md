@@ -69,13 +69,8 @@ Two file shapes are supported:
 - 2026 format: first row is ticker symbols, rows are days, columns are
   instruments. This is transposed after loading.
 
-The current sample file, `data/prices.txt`, contains:
+The current sample file, `data/prices.txt`, contains the prices from days 1-750
 
-```text
-100 101 102 103 104
-50 51 50 52 53
-200 198 199 201 202
-```
 
 This sample has 3 instruments and 5 days.
 
